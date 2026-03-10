@@ -86,6 +86,11 @@ export async function POST(req: Request) {
         },
       },
     },
+    experimental_telemetry: {
+      isEnabled: true,
+      functionId: 'chat',
+      metadata: { selectedModel },
+    },
     experimental_transform: smoothStream({
       delayInMs: 5, // optional: defaults to 10ms
       chunking: 'line', // optional: defaults to 'word'

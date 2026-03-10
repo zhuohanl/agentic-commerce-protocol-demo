@@ -1,3 +1,6 @@
+// OTel must be imported before any other modules
+import './instrumentation';
+
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
