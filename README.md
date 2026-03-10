@@ -22,7 +22,15 @@ To accelerate experimentation, we built the **first working mock implementation*
 
 - Node.js 20+
 - Docker & Docker Compose
-- OpenAI and/or Anthropic API keys
+- An AI API key: OpenAI, Anthropic, or Azure OpenAI
+
+> **Windows users:** The dev script requires bash. Run everything inside **WSL** (Windows Subsystem for Linux) with Node.js installed there.
+> After running `npm install`, rebuild the `sharp` native module for Linux:
+> ```bash
+> npm install --platform=linux --arch=x64 sharp
+> ```
+
+---
 
 ### Setup
 
@@ -38,36 +46,64 @@ To accelerate experimentation, we built the **first working mock implementation*
    ```
    This installs all dependencies across all workspaces (demo services + chat client).
 
-3. **Configure API keys for the chat client**
+3. **Configure the chat client**
    ```bash
    cd chat-client
    cp .env.example .env
-   # Edit .env and add your OPENAI_API_KEY and/or ANTHROPIC_API_KEY
+   ```
+   Edit `.env` and fill in at least one AI provider and the database URL:
+
+   | Variable | Description |
+   |---|---|
+   | `DATABASE_URL` | PostgreSQL connection string (see step 4 — leave as-is if using Docker) |
+   | `OPENAI_API_KEY` | OpenAI API key |
+   | `ANTHROPIC_API_KEY` | Anthropic API key |
+   | `AZURE_RESOURCE_NAME` | Azure OpenAI resource name (subdomain of `*.openai.azure.com`) |
+   | `AZURE_DEPLOYMENT_NAME` | Azure OpenAI deployment name (e.g. `gpt-4o`) |
+   | `AZURE_API_KEY` | Azure OpenAI API key — leave blank to use **Entra ID** (`DefaultAzureCredential`) |
+
+   API keys can also be set at runtime via the **API Key Settings** dialog in the chat UI.
+
+   ```bash
    cd ..
    ```
 
-4. **Start all services**
+4. **Start all backend services**
    ```bash
    npm run dev
    ```
    This will:
-   - Start PostgreSQL databases (via Docker)
+   - Start PostgreSQL databases via Docker (merchant, PSP, and chat — ports 5432, 5433, 5434)
+   - Seed the merchant database with 194 demo products
    - Start the Merchant API (port 4001)
    - Start the PSP API (port 4000)
-   - Start the MCP server (port 3112)
+   - Start the MCP UI server (port 3112) — downloads a ~25 MB embedding model on first run
 
-5. **Start the chat client** (in a new terminal)
+5. **Initialise the chat database** (first run only)
+   ```bash
+   cd chat-client
+   npm run db:push
+   cd ..
+   ```
+   This creates the `chats` and `messages` tables in the chat PostgreSQL database.
+
+6. **Start the chat client** (in a new terminal)
    ```bash
    cd chat-client
    npm run dev
    ```
    Open http://localhost:3000 in your browser.
 
-6. **Try it out!**
+7. **Connect the MCP server**
+   - Click the **server icon** in the bottom-left of the sidebar
+   - Add `http://localhost:3112/mcp` and enable it
+      > If `http://localhost:3112/mcp` is already there, it might stay inactive and click the button to ENABLE it
+
+8. **Try it out!**
    - Ask the agent: "Show me some shirts"
    - Add items to cart
-   - Complete checkout with test payment info
-   - Examine how the Client, Merchant, and PSP interact via terminal
+   - Complete checkout with test payment info (use the "Use Test Data" buttons)
+   - Watch the Client, Merchant, and PSP interact in the terminal
 
 ## Repository Structure
 

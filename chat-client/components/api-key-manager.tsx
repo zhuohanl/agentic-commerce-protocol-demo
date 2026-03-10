@@ -31,6 +31,27 @@ const API_KEYS_CONFIG: ApiKeyConfig[] = [
     placeholder: "sk-ant-..."
   },
   {
+    name: "Azure OpenAI — API Key",
+    key: "azure_api_key",
+    storageKey: "AZURE_API_KEY",
+    label: "Azure OpenAI API Key (leave blank to use Entra ID server-side)",
+    placeholder: "Leave blank for Entra ID auth"
+  },
+  {
+    name: "Azure OpenAI — Resource Name",
+    key: "azure_resource_name",
+    storageKey: "AZURE_RESOURCE_NAME",
+    label: "Azure Resource Name",
+    placeholder: "my-resource (from https://my-resource.openai.azure.com)"
+  },
+  {
+    name: "Azure OpenAI — Deployment Name",
+    key: "azure_deployment_name",
+    storageKey: "AZURE_DEPLOYMENT_NAME",
+    label: "Azure Deployment Name",
+    placeholder: "gpt-4o"
+  },
+  {
     name: "Groq",
     key: "groq",
     storageKey: "GROQ_API_KEY",

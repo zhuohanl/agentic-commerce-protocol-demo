@@ -28,3 +28,18 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+
+  chat_db:
+    image: postgres:16-alpine
+    container_name: acp_chat_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: acp_chat
+    ports:
+      - '5434:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 5

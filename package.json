@@ -21,13 +21,14 @@
   ],
   "scripts": {
     "install:all": "npm install",
-    "dev": "./start-dev.sh",
+    "dev": "bash ./start-dev.sh",
     "stop": "pkill -9 -f 'tsx' && pkill -9 -f 'vite-node' && pkill -9 -f concurrently && lsof -ti:3000,3001,3112,4000 | xargs kill -9 2>/dev/null || true && docker-compose down"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
   },
   "dependencies": {
-    "get-port": "^7.1.0"
+    "get-port": "^7.1.0",
+    "sharp": "^0.34.5"
   }
 }
