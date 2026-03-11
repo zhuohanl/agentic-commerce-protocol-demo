@@ -105,6 +105,52 @@ To accelerate experimentation, we built the **first working mock implementation*
    - Complete checkout with test payment info (use the "Use Test Data" buttons)
    - Watch the Client, Merchant, and PSP interact in the terminal
 
+---
+
+## Observability (Aspire Dashboard)
+
+All four services — Merchant, PSP, MCP UI Server, and Chat Client — are instrumented with [OpenTelemetry](https://opentelemetry.io/) and export traces and metrics to a standalone [.NET Aspire Dashboard](https://learn.microsoft.com/en-us/dotnet/aspire/fundamentals/dashboard/overview) container.
+
+The dashboard starts automatically as part of `npm run dev` (step 4 above). Once the stack is running, open:
+
+**http://localhost:18888**
+
+No login is required (anonymous access is enabled).
+
+### What you can see
+
+| Signal | Examples |
+|---|---|
+| Traces | End-to-end request spans across all services, including LLM calls to Azure OpenAI with token counts |
+| Metrics | HTTP request counts, durations, and custom metrics per service |
+
+### LLM traces
+
+Chat Client uses the [Vercel AI SDK `experimental_telemetry`](https://sdk.vercel.ai/docs/ai-sdk-core/telemetry) option on each `streamText` call. This emits a span named `ai.streamText.doStream` with the following attributes:
+
+- `gen_ai.usage.input_tokens` — prompt token count
+- `gen_ai.usage.output_tokens` — completion token count
+- `gen_ai.response.model` — resolved model name
+
+### Ports
+
+| Port | Service |
+|---|---|
+| `18888` | Aspire Dashboard UI |
+| `4317` | OTLP gRPC ingest |
+| `4318` | OTLP HTTP ingest |
+
+### Environment variables
+
+Override the OTLP endpoint or service name per service if needed:
+
+| Variable | Default | Description |
+|---|---|---|
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4318` | OTLP HTTP collector URL |
+| `OTEL_SERVICE_NAME` | e.g. `acp-merchant` | Service name shown in the dashboard |
+
+---
+
 ## Repository Structure
 
 ```
