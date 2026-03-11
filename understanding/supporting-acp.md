@@ -20,7 +20,7 @@ Official references:
 - ACP Specification Repository  
   https://github.com/agentic-commerce-protocol/agentic-commerce-protocol
 
-ACP is designed to enable **programmatic commerce flows between AI agents, users, and businesses** while allowing merchants to keep their existing payment and fulfillment infrastructure. :contentReference[oaicite:0]{index=0}
+ACP is designed to enable **programmatic commerce flows between AI agents, users, and businesses** while allowing merchants to keep their existing payment and fulfillment infrastructure.
 
 ---
 
@@ -66,7 +66,7 @@ Official documentation:
 - https://developers.openai.com/commerce/specs/checkout/
 - https://github.com/agentic-commerce-protocol/agentic-commerce-protocol
 
-The merchant backend returns the **full checkout state with each response**, allowing the AI agent to render the correct purchase status. :contentReference[oaicite:1]{index=1}
+The merchant backend returns the **full checkout state with each response**, allowing the AI agent to render the correct purchase status.
 
 ---
 
@@ -120,7 +120,7 @@ Official documentation:
 
 - https://developers.openai.com/commerce/specs/checkout/
 
-The agent renders the checkout experience based on the state returned by the merchant system. :contentReference[oaicite:2]{index=2}
+The agent renders the checkout experience based on the state returned by the merchant system.
 
 ---
 
@@ -173,7 +173,7 @@ Official documentation:
 
 - https://docs.stripe.com/agentic-commerce/protocol
 
-Shared payment tokens are time-limited and scoped to a specific transaction to improve security. :contentReference[oaicite:3]{index=3}
+Shared payment tokens are time-limited and scoped to a specific transaction to improve security.
 
 ---
 
@@ -202,7 +202,7 @@ Official reference:
 
 - https://developers.openai.com/commerce/guides/get-started/
 
-ACP implementations often require merchants to expose product feeds and checkout APIs for AI agents to interact with their commerce platform. :contentReference[oaicite:4]{index=4}
+ACP implementations often require merchants to expose product feeds and checkout APIs for AI agents to interact with their commerce platform.
 
 ---
 
