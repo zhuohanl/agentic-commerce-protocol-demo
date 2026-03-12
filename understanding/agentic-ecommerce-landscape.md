@@ -143,7 +143,7 @@ ACP focuses on **executing a purchase**, while UCP attempts to standardize **the
 
 # 5. Typical Agentic Commerce Workflow
 
-```
+```mermaid
 sequenceDiagram
 
 User->>AI Agent: "Find running shoes under $150"
