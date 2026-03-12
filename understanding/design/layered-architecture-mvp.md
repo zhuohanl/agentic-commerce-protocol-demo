@@ -24,7 +24,7 @@ Together they create a modular stack for **agentic commerce systems**, separatin
 
 ## Architecture Diagram
 
-```mermaid
+```mermaidI
 flowchart TB
 
 subgraph L1[Experience]
