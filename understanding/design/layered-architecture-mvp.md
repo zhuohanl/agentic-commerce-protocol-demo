@@ -328,78 +328,68 @@ The following flowchart traces the happy path (95% of interactions) when a user 
 
 For unhappy path handling (unexpected user input during checkout), see [Orchestrator Design — LLM Router Exit Classification](orchestrator-design.md#llm-router-exit-classification).
 
+### Phase 1: Discovery (Conversation Mode)
+
+User says: "I want to buy some shirts"
+
 ```mermaid
 flowchart TB
-
-subgraph Experience
-    User((User))
-    UI[Super App UI]
-end
-
-subgraph Orchestration
-    Orch[Orchestrator]
-end
-
-subgraph Protocols
-    MCP[MCP Tool Gateway]
-    A2A[A2A Agent Gateway]
-    ACP[ACP Checkout Adapter]
-end
-
-subgraph Commerce
-    Catalog[(Catalog DB)]
-    Ranker[Offer Ranking]
-    MerchantAgent[Merchant Agent]
-    MerchantAPI[Merchant Checkout API]
-    PSP[Payment Provider]
-end
-
-%% CONVERSATION MODE (LLM-driven: discovery + cart)
-
-User -->|1 Buy some shirts| UI
-UI -->|2 Forward request| Orch
-
-Orch -->|3 lookup_products| MCP
-MCP -->|4 Query| Catalog
+User((User)) -->|1 Buy some shirts| UI[Super App UI]
+UI -->|2 Forward request| Orch[Orchestrator]
+Orch -->|3 lookup_products| MCP[MCP Tool Gateway]
+MCP -->|4 Query| Catalog[(Catalog DB)]
 Catalog -.->|5 Product list| MCP
 MCP -.->|6 Products| Orch
-
 Orch -->|7 rank_offers| MCP
-MCP -->|8 Score| Ranker
+MCP -->|8 Score| Ranker[Offer Ranking]
 Ranker -.->|9 Ranked offers| MCP
 MCP -.->|10 Top results| Orch
-
 Orch -.->|11 Display shirts| UI
+```
 
-User -->|12 Add shirt to cart| UI
-UI -->|13 Forward selection| Orch
+### Phase 2: Add to Cart (Conversation Mode)
+
+User selects a product to add to their cart.
+
+```mermaid
+flowchart TB
+User((User)) -->|12 Add shirt to cart| UI[Super App UI]
+UI -->|13 Forward selection| Orch[Orchestrator]
 Orch -.->|14 Added to cart| UI
+```
 
-User -->|15 Proceed to checkout| UI
-UI -->|16 Forward checkout request| Orch
+### Phase 3: Checkout Initiation (Conversation Mode → Workflow Mode)
 
-Orch -->|17 check_availability| A2A
-A2A -->|18 Verify stock| MerchantAgent
+User proceeds to checkout. The orchestrator validates availability, creates the ACP session, and switches to workflow mode.
+
+```mermaid
+flowchart TB
+User((User)) -->|15 Proceed to checkout| UI[Super App UI]
+UI -->|16 Forward checkout request| Orch[Orchestrator]
+Orch -->|17 check_availability| A2A[A2A Agent Gateway]
+A2A -->|18 Verify stock| MerchantAgent[Merchant Agent]
 MerchantAgent -.->|19 In stock| A2A
 A2A -.->|20 Confirmed| Orch
-
-Orch -->|21 create_checkout_session| ACP
-ACP -->|22 Create session| MerchantAPI
+Orch -->|21 create_checkout_session| ACP[ACP Checkout Adapter]
+ACP -->|22 Create session| MerchantAPI[Merchant Checkout API]
 MerchantAPI -.->|23 Session ID| ACP
 ACP -.->|24 Checkout ready| Orch
-
-%% WORKFLOW MODE (DAG-driven: shipping > payment > review > confirm)
-
 Orch -.->|25 Show shipping form| UI
+```
 
-User -->|26 Provide contact/shipping| UI
-UI -->|27 Forward details| Orch
-Orch -->|28 update_checkout_session| ACP
-ACP -->|29 Update contact/shipping| MerchantAPI
+### Phase 4: Shipping and Payment (Workflow Mode)
+
+User provides shipping and payment details. Each submission is a deterministic DAG step routed directly through ACP.
+
+```mermaid
+flowchart TB
+User((User)) -->|26 Provide contact/shipping| UI[Super App UI]
+UI -->|27 Forward details| Orch[Orchestrator]
+Orch -->|28 update_checkout_session| ACP[ACP Checkout Adapter]
+ACP -->|29 Update contact/shipping| MerchantAPI[Merchant Checkout API]
 MerchantAPI -.->|30 Updated| ACP
 ACP -.->|31 Session updated| Orch
 Orch -.->|32 Show payment form| UI
-
 User -->|33 Provide payment details| UI
 UI -->|34 Forward payment| Orch
 Orch -->|35 update_checkout_session| ACP
@@ -407,18 +397,22 @@ ACP -->|36 Update payment| MerchantAPI
 MerchantAPI -.->|37 Updated| ACP
 ACP -.->|38 Payment stored| Orch
 Orch -.->|39 Show order review| UI
+```
 
-User -->|40 Confirm purchase| UI
-UI -->|41 Forward confirmation| Orch
+### Phase 5: Confirm and Pay (Workflow Mode)
 
-Orch -->|42 complete_checkout| ACP
-ACP -->|43 Finalize order| MerchantAPI
-MerchantAPI -->|44 Charge payment| PSP
+User confirms the order. The merchant finalizes and charges payment via the PSP.
+
+```mermaid
+flowchart TB
+User((User)) -->|40 Confirm purchase| UI[Super App UI]
+UI -->|41 Forward confirmation| Orch[Orchestrator]
+Orch -->|42 complete_checkout| ACP[ACP Checkout Adapter]
+ACP -->|43 Finalize order| MerchantAPI[Merchant Checkout API]
+MerchantAPI -->|44 Charge payment| PSP[Payment Provider]
 PSP -.->|45 Payment success| MerchantAPI
-
 MerchantAPI -.->|46 Order confirmation| ACP
 ACP -.->|47 Success| Orch
-
 Orch -.->|48 Show confirmation| UI
 ```
 
