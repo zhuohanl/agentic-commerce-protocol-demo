@@ -14,6 +14,38 @@ The core design principle: **deterministic speed on the happy path, LLM flexibil
 
 ---
 
+## Decision Point Reference
+
+| Decision | Name | Mechanism | Latency | Location |
+|---|---|---|---|---|
+| D1 | Active workflow session? | Rule-based (if/else) — checks orchestrator state | ~0ms | Orchestrator entry |
+| D2 | Fast Match | Rule-based (regex) — matches input against current node's expected patterns | ~0ms | Workflow mode |
+| D3 | LLM Router | Small/fast LLM — classifies unexpected input into categories A-E | ~200-500ms | Workflow mode |
+| D3a | Keep session? | User input — system presents options, user chooses | User-paced | Workflow mode (D3 Category B) |
+| D3b | Confirm cancel? | User input — system presents options, user chooses | User-paced | Workflow mode (D3 Category D) |
+| D3c | Continue or browse? | User input — system presents options, user chooses | User-paced | Workflow mode (D3 Category E) |
+| D4 | start_checkout? | Conversation LLM — piggybacks on existing LLM reasoning, not a separate call | ~0ms additional | Conversation mode |
+
+### Design Rationale
+
+- **D1, D2:** Zero-latency rule checks. The happy path through checkout never touches an LLM.
+- **D3:** Uses a small, fast LLM (not the conversation LLM) to minimize checkout latency. Only invoked when Fast Match fails (~5% of checkout inputs). Classification only — does not generate free-form responses.
+- **D3 Category A (Quick Question):** After D3 classifies the input as a quick question, the answer is generated via **RAG lookup** (knowledge base retrieval), not free LLM generation. This keeps responses grounded and fast.
+- **D3a, D3b, D3c:** No AI involved. The system presents a choice, the user responds. Deterministic routing based on user selection.
+- **D4:** Not a separate decision step. The conversation LLM is already interpreting user intent as part of its reasoning loop. Detecting `start_checkout` is a natural output of that same call, adding zero additional latency.
+
+### Evolution Path
+
+| Stage | D2 (Fast Match) | D3 (LLM Router) |
+|---|---|---|
+| MVP | Regex + field matching | Small/fast LLM |
+| Phase 2 | Embeddings-based classifier (~10-20ms) | Same |
+| Phase 3 | Fine-tuned lightweight model (~20ms) | Fine-tuned small model with production data |
+
+Each stage improves flexibility without changing the orchestrator's architecture. The interfaces remain the same; only the implementation behind D2 and D3 is swapped.
+
+---
+
 ## Execution Modes
 
 The orchestrator operates in two modes:
@@ -67,13 +99,13 @@ User input
 %%{init: {'flowchart': {'curve': 'stepBefore'}}}%%
 flowchart LR
 
-A([User inquiry]) --> B{"D1: Active workflow session?"}
+A([User inquiry]) --> B{"D1: Active workflow session?<br/>(rule-based: if/else)"}
 
 %% NO PATH
 B -- no --> F
 
 subgraph Conversation
-F[LLM] --> G{"D4: start_checkout?"}
+F[LLM] --> G{"D4: start_checkout?<br/>(conversation LLM)"}
 G -- no --> F
 end
 
@@ -83,15 +115,15 @@ G -- yes --> C
 B -- yes --> C
 
 subgraph Workflow
-C{"D2: Fast Match<br/>Expected input?<br/>rules/regex"}
+C{"D2: Fast Match<br/>Expected input?<br/>(rule-based: regex)"}
 C -- yes --> D[Map to node<br/>Execute]
-C -- no --> E{"D3: LLM Router<br/>Classifies intent"}
+C -- no --> E{"D3: LLM Router<br/>Classify intent<br/>(small/fast LLM)"}
 
-E -- A: Quick question --> QA[Answer one-shot]
-E -- B: Discovery --> KB{"D3a: Keep session?"}
+E -- A: Quick question --> QA[Answer via RAG]
+E -- B: Discovery --> KB{"D3a: Keep session?<br/>(user input)"}
 E -- C: Cart mod --> CM[Route to cart node]
-E -- D: Abandon --> AB{"D3b: Confirm cancel?"}
-E -- E: Ambiguous --> AM{"D3c: Continue or browse?"}
+E -- D: Abandon --> AB{"D3b: Confirm cancel?<br/>(user input)"}
+E -- E: Ambiguous --> AM{"D3c: Continue or browse?<br/>(user input)"}
 end
 
 QA --> D
@@ -127,14 +159,18 @@ Fast Match checks whether user input matches expected actions for the current wo
 
 LLM Router handles unexpected inputs that Fast Match cannot classify.
 
-The LLM receives the current workflow state and user input, then decides:
+**Mechanism:** A small, fast LLM receives the current workflow state and user input, then **classifies** the input into one of five categories. It does not generate free-form responses.
 
-| LLM decision | Action |
+| Classification | Action |
 |---|---|
+| A: Quick question | Answer via RAG lookup (knowledge base), return to current node |
+| B: Discovery / comparison | Ask user about session preservation (D3a), may exit to conversation |
+| C: Cart modification | Route to cart node (stay in workflow) |
+| D: Abandonment | Confirm with user (D3b), may cancel session |
+| E: Ambiguous | Clarify with user (D3c), resolve to another category |
 | Navigate to unlocked node | Route user to the target node (e.g., "change my address" -> shipping node) |
-| Return to conversation mode | Exit workflow, re-enter conversation (e.g., "show me other shirts") |
-| Clarify | Ask the user what they mean |
-| Continue | Input was just a comment, stay on current node |
+
+**Category A answer generation:** When D3 classifies input as a quick question, the answer is retrieved from a knowledge base via RAG, not generated freely by the LLM. This keeps responses grounded in verified content (return policies, shipping times, product specs) and avoids hallucination in the checkout flow.
 
 ---
 
