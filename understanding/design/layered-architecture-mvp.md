@@ -412,22 +412,42 @@ MerchantAPI -.->|23 Session ID| ACP
 ACP -.->|24 Checkout ready| Planner
 
 Planner -.->|25 Checkout prepared| Intent
-Intent -.->|26 Show checkout| UI
+Intent -.->|26 Show checkout form| UI
 
-User -->|27 Confirm purchase| UI
-UI -->|28 Forward confirmation| Intent
-Intent -->|29 confirm_order| Planner
+User -->|27 Provide contact/shipping| UI
+UI -->|28 Forward details| Intent
+Intent -->|29 update_checkout| Planner
+Planner -->|30 update_checkout_session| ACP
+ACP -->|31 Update contact/shipping| MerchantAPI
+MerchantAPI -.->|32 Updated| ACP
+ACP -.->|33 Session updated| Planner
+Planner -.->|34 Request payment| Intent
+Intent -.->|35 Show payment form| UI
 
-Planner -->|30 complete_checkout| ACP
-ACP -->|31 Finalize order| MerchantAPI
-MerchantAPI -->|32 Charge payment| PSP
-PSP -.->|33 Payment success| MerchantAPI
+User -->|36 Provide payment details| UI
+UI -->|37 Forward payment| Intent
+Intent -->|38 update_checkout| Planner
+Planner -->|39 update_checkout_session| ACP
+ACP -->|40 Update payment| MerchantAPI
+MerchantAPI -.->|41 Updated| ACP
+ACP -.->|42 Payment stored| Planner
+Planner -.->|43 Ready to confirm| Intent
+Intent -.->|44 Show order summary| UI
 
-MerchantAPI -.->|34 Order confirmation| ACP
-ACP -.->|35 Success| Planner
+User -->|45 Confirm purchase| UI
+UI -->|46 Forward confirmation| Intent
+Intent -->|47 confirm_order| Planner
 
-Planner -.->|36 Order complete| Intent
-Intent -.->|37 Show confirmation| UI
+Planner -->|48 complete_checkout| ACP
+ACP -->|49 Finalize order| MerchantAPI
+MerchantAPI -->|50 Charge payment| PSP
+PSP -.->|51 Payment success| MerchantAPI
+
+MerchantAPI -.->|52 Order confirmation| ACP
+ACP -.->|53 Success| Planner
+
+Planner -.->|54 Order complete| Intent
+Intent -.->|55 Show confirmation| UI
 ```
 
 ---
@@ -483,22 +503,44 @@ MerchantAPI-->>ACP: 23. Session ID
 ACP-->>Planner: 24. Checkout ready
 
 Planner-->>Intent: 25. Checkout prepared
-Intent-->>UI: 26. Show checkout
+Intent-->>UI: 26. Show checkout form
 
-User->>UI: 27. Confirm purchase
-UI->>Intent: 28. Forward confirmation
-Intent->>Planner: 29. confirm_order
+Note over User,UI: First time: user fills manually. Returning user: auto-retrieved by login.
 
-Planner->>ACP: 30. complete_checkout
-ACP->>MerchantAPI: 31. Finalize order
-MerchantAPI->>PSP: 32. Charge payment
-PSP-->>MerchantAPI: 33. Payment success
+User->>UI: 27. Provide contact/shipping
+UI->>Intent: 28. Forward details
+Intent->>Planner: 29. update_checkout
+Planner->>ACP: 30. update_checkout_session
+ACP->>MerchantAPI: 31. Update contact/shipping
+MerchantAPI-->>ACP: 32. Updated
+ACP-->>Planner: 33. Session updated
+Planner-->>Intent: 34. Request payment
+Intent-->>UI: 35. Show payment form
 
-MerchantAPI-->>ACP: 34. Order confirmation
-ACP-->>Planner: 35. Success
+User->>UI: 36. Provide payment details
+UI->>Intent: 37. Forward payment
+Intent->>Planner: 38. update_checkout
+Planner->>ACP: 39. update_checkout_session
+ACP->>MerchantAPI: 40. Update payment
+MerchantAPI-->>ACP: 41. Updated
+ACP-->>Planner: 42. Payment stored
+Planner-->>Intent: 43. Ready to confirm
+Intent-->>UI: 44. Show order summary
 
-Planner-->>Intent: 36. Order complete
-Intent-->>UI: 37. Show confirmation
+User->>UI: 45. Confirm purchase
+UI->>Intent: 46. Forward confirmation
+Intent->>Planner: 47. confirm_order
+
+Planner->>ACP: 48. complete_checkout
+ACP->>MerchantAPI: 49. Finalize order
+MerchantAPI->>PSP: 50. Charge payment
+PSP-->>MerchantAPI: 51. Payment success
+
+MerchantAPI-->>ACP: 52. Order confirmation
+ACP-->>Planner: 53. Success
+
+Planner-->>Intent: 54. Order complete
+Intent-->>UI: 55. Show confirmation
 ```
 
 ## End-to-End Flow Summary
