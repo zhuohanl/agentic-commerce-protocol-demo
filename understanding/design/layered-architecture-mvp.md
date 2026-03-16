@@ -352,6 +352,60 @@ In ACP flows, payment credentials are exchanged using single-use tokens, ensurin
 # End-to-End Transaction Flow
 
 The following sequence diagram illustrates how all layers interact to complete a purchase.
+```mermaid
+sequenceDiagram
+
+actor User
+participant UI as Super App UI
+participant Intent as Intent Classification
+participant Planner as Planner / Orchestrator
+participant MCP as MCP Gateway
+participant A2A as Merchant Agent
+participant ACP as ACP Adapter
+participant Merchant as Merchant API
+participant PSP as Payment Provider
+
+User->>UI: "Find a blue shirt"
+UI->>Intent: user request
+
+Intent->>Planner: intent = search_products
+
+Planner->>MCP: lookup_products(query)
+MCP->>Catalog: search catalog
+Catalog-->>MCP: product list
+MCP-->>Planner: results
+
+Planner->>MCP: rank_offers(products)
+MCP->>Ranker: ranking
+Ranker-->>MCP: ranked offers
+MCP-->>Planner: ranked products
+
+Planner-->>UI: show products
+
+User->>UI: select product
+UI->>Planner: purchase request
+
+Planner->>A2A: verify availability
+A2A->>Merchant: inventory check
+Merchant-->>A2A: available
+A2A-->>Planner: confirmed
+
+Planner->>ACP: create_checkout_session
+ACP->>Merchant: create session
+Merchant-->>ACP: session id
+
+User->>UI: confirm purchase
+UI->>Planner: proceed
+
+Planner->>ACP: complete_checkout
+ACP->>Merchant: finalize order
+Merchant->>PSP: charge payment
+PSP-->>Merchant: payment success
+
+Merchant-->>ACP: order confirmation
+ACP-->>Planner: success
+Planner-->>UI: display success message
+```
 
 ## End-to-End Flow Summary
 
