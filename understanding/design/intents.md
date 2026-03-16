@@ -129,7 +129,8 @@ This mapping ensures the system remains deterministic.
 |---|---|---|
 | search_products | MCP | tool call |
 | rank_offers | MCP | tool call |
-| check_availability | A2A | merchant agent |
+| check_availability | A2A | merchant agent (read-only, during discovery) |
+| reserve_item | A2A | merchant agent (soft lock with TTL, at checkout) |
 | start_checkout | ACP | create session |
 | confirm_order | ACP | checkout |
 | complete_payment | ACP | payment |

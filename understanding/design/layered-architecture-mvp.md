@@ -43,6 +43,7 @@ end
 
 subgraph L4[Local Services]
 Catalog[Catalog DB]
+KB[Knowledge Base]
 Ranker[Offer Ranking]
 Checkout[Checkout Service]
 end
@@ -60,6 +61,7 @@ Orch --> A2A
 Orch --> ACP
 
 MCP --> Catalog
+MCP --> KB
 MCP --> Ranker
 
 A2A --> MerchantAgent
@@ -172,7 +174,15 @@ The Model Context Protocol enables AI systems to access external tools, APIs, an
 lookup_products(query)
 get_product_details(product_id)
 rank_offers(product_list)
+query_knowledge_base(question)
 ```
+
+The `query_knowledge_base` tool provides RAG-based retrieval from the knowledge base. It is used in two contexts:
+
+- **Conversation mode:** The conversation LLM calls it to answer user questions during discovery (e.g., "what's the return policy for this brand?")
+- **Workflow mode (D3A):** The small/fast LLM calls it to answer quick questions during checkout (e.g., "how long does shipping take?")
+
+Both modes use the same tool and knowledge base, ensuring consistent answers. The MCP interface decouples the tool from the calling LLM.
 
 Through MCP, the system can interact with local services without embedding service-specific logic.
 
@@ -246,6 +256,26 @@ price
 merchant_id
 availability
 ```
+
+### Component: Knowledge Base
+
+The Knowledge Base stores unstructured content used to answer user questions via RAG retrieval.
+
+**Responsibilities**
+
+- Store and index unstructured content (policies, FAQs, product guides)
+- Support semantic search via embeddings
+- Return relevant documents for a given query
+
+**Example content:**
+
+- Return and refund policies
+- Shipping times and methods
+- Product care instructions
+- Warranty information
+- Brand-specific FAQs
+
+This is the same knowledge base accessed by both the conversation LLM (during discovery) and the small/fast LLM (D3A quick questions during checkout), exposed as the `query_knowledge_base` MCP tool.
 
 ### Component: Offer Ranking Engine
 
@@ -330,7 +360,7 @@ For unhappy path handling (unexpected user input during checkout), see [Orchestr
 
 ### Phase 1: Discovery (Conversation Mode)
 
-User says: "I want to buy some shirts"
+User says: "I want to buy some shirts". The orchestrator searches the catalog, ranks results, checks availability with merchant agents, and presents only in-stock products with variant-level stock annotations.
 
 ```mermaid
 flowchart TB
@@ -344,7 +374,11 @@ Orch -->|7 rank_offers| MCP
 MCP -->|8 Score| Ranker[Offer Ranking]
 Ranker -.->|9 Ranked offers| MCP
 MCP -.->|10 Top results| Orch
-Orch -.->|11 Display shirts| UI
+Orch -->|11 check_availability| A2A[A2A Agent Gateway]
+A2A -->|12 Verify stock per variant| MerchantAgent[Merchant Agent]
+MerchantAgent -.->|13 Stock status| A2A
+A2A -.->|14 Availability| Orch
+Orch -.->|15 Display in-stock shirts| UI
 ```
 
 ### Phase 2: Add to Cart (Conversation Mode)
@@ -353,28 +387,28 @@ User selects a product to add to their cart.
 
 ```mermaid
 flowchart TB
-User((User)) -->|12 Add shirt to cart| UI[Super App UI]
-UI -->|13 Forward selection| Orch[Orchestrator]
-Orch -.->|14 Added to cart| UI
+User((User)) -->|16 Add shirt to cart| UI[Super App UI]
+UI -->|17 Forward selection| Orch[Orchestrator]
+Orch -.->|18 Added to cart| UI
 ```
 
 ### Phase 3: Checkout Initiation (Conversation Mode → Workflow Mode)
 
-User proceeds to checkout. The orchestrator validates availability, creates the ACP session, and switches to workflow mode.
+User proceeds to checkout. The orchestrator reserves the item (soft lock with TTL), creates the ACP checkout session, and switches to workflow mode.
 
 ```mermaid
 flowchart TB
-User((User)) -->|15 Proceed to checkout| UI[Super App UI]
-UI -->|16 Forward checkout request| Orch[Orchestrator]
-Orch -->|17 check_availability| A2A[A2A Agent Gateway]
-A2A -->|18 Verify stock| MerchantAgent[Merchant Agent]
-MerchantAgent -.->|19 In stock| A2A
-A2A -.->|20 Confirmed| Orch
-Orch -->|21 create_checkout_session| ACP[ACP Checkout Adapter]
-ACP -->|22 Create session| MerchantAPI[Merchant Checkout API]
-MerchantAPI -.->|23 Session ID| ACP
-ACP -.->|24 Checkout ready| Orch
-Orch -.->|25 Show shipping form| UI
+User((User)) -->|19 Proceed to checkout| UI[Super App UI]
+UI -->|20 Forward checkout request| Orch[Orchestrator]
+Orch -->|21 reserve_item| A2A[A2A Agent Gateway]
+A2A -->|22 Reserve with TTL| MerchantAgent[Merchant Agent]
+MerchantAgent -.->|23 Reserved| A2A
+A2A -.->|24 Reservation confirmed| Orch
+Orch -->|25 create_checkout_session| ACP[ACP Checkout Adapter]
+ACP -->|26 Create session| MerchantAPI[Merchant Checkout API]
+MerchantAPI -.->|27 Session ID| ACP
+ACP -.->|28 Checkout ready| Orch
+Orch -.->|29 Show shipping form| UI
 ```
 
 ### Phase 4: Shipping and Payment (Workflow Mode)
@@ -383,20 +417,20 @@ User provides shipping and payment details. Each submission is a deterministic D
 
 ```mermaid
 flowchart TB
-User((User)) -->|26 Provide contact/shipping| UI[Super App UI]
-UI -->|27 Forward details| Orch[Orchestrator]
-Orch -->|28 update_checkout_session| ACP[ACP Checkout Adapter]
-ACP -->|29 Update contact/shipping| MerchantAPI[Merchant Checkout API]
-MerchantAPI -.->|30 Updated| ACP
-ACP -.->|31 Session updated| Orch
-Orch -.->|32 Show payment form| UI
-User -->|33 Provide payment details| UI
-UI -->|34 Forward payment| Orch
-Orch -->|35 update_checkout_session| ACP
-ACP -->|36 Update payment| MerchantAPI
-MerchantAPI -.->|37 Updated| ACP
-ACP -.->|38 Payment stored| Orch
-Orch -.->|39 Show order review| UI
+User((User)) -->|30 Provide contact/shipping| UI[Super App UI]
+UI -->|31 Forward details| Orch[Orchestrator]
+Orch -->|32 update_checkout_session| ACP[ACP Checkout Adapter]
+ACP -->|33 Update contact/shipping| MerchantAPI[Merchant Checkout API]
+MerchantAPI -.->|34 Updated| ACP
+ACP -.->|35 Session updated| Orch
+Orch -.->|36 Show payment form| UI
+User -->|37 Provide payment details| UI
+UI -->|38 Forward payment| Orch
+Orch -->|39 update_checkout_session| ACP
+ACP -->|40 Update payment| MerchantAPI
+MerchantAPI -.->|41 Updated| ACP
+ACP -.->|42 Payment stored| Orch
+Orch -.->|43 Show order review| UI
 ```
 
 ### Phase 5: Confirm and Pay (Workflow Mode)
@@ -405,15 +439,15 @@ User confirms the order. The merchant finalizes and charges payment via the PSP.
 
 ```mermaid
 flowchart TB
-User((User)) -->|40 Confirm purchase| UI[Super App UI]
-UI -->|41 Forward confirmation| Orch[Orchestrator]
-Orch -->|42 complete_checkout| ACP[ACP Checkout Adapter]
-ACP -->|43 Finalize order| MerchantAPI[Merchant Checkout API]
-MerchantAPI -->|44 Charge payment| PSP[Payment Provider]
-PSP -.->|45 Payment success| MerchantAPI
-MerchantAPI -.->|46 Order confirmation| ACP
-ACP -.->|47 Success| Orch
-Orch -.->|48 Show confirmation| UI
+User((User)) -->|44 Confirm purchase| UI[Super App UI]
+UI -->|45 Forward confirmation| Orch[Orchestrator]
+Orch -->|46 complete_checkout| ACP[ACP Checkout Adapter]
+ACP -->|47 Finalize order| MerchantAPI[Merchant Checkout API]
+MerchantAPI -->|48 Charge payment| PSP[Payment Provider]
+PSP -.->|49 Payment success| MerchantAPI
+MerchantAPI -.->|50 Order confirmation| ACP
+ACP -.->|51 Success| Orch
+Orch -.->|52 Show confirmation| UI
 ```
 
 ---
@@ -452,70 +486,75 @@ MCP->>Ranker: 8. Score
 Ranker-->>MCP: 9. Ranked offers
 MCP-->>Orch: 10. Top results
 
-Orch-->>UI: 11. Display shirts
+Orch->>A2A: 11. check_availability
+A2A->>MerchantAgent: 12. Verify stock per variant
+MerchantAgent-->>A2A: 13. Stock status
+A2A-->>Orch: 14. Availability
 
-User->>UI: 12. Add shirt to cart
-UI->>Orch: 13. Forward selection
-Orch-->>UI: 14. Added to cart
+Orch-->>UI: 15. Display in-stock shirts
 
-User->>UI: 15. Proceed to checkout
-UI->>Orch: 16. Forward checkout request
+User->>UI: 16. Add shirt to cart
+UI->>Orch: 17. Forward selection
+Orch-->>UI: 18. Added to cart
 
-Orch->>A2A: 17. check_availability
-A2A->>MerchantAgent: 18. Verify stock
-MerchantAgent-->>A2A: 19. In stock
-A2A-->>Orch: 20. Confirmed
+User->>UI: 19. Proceed to checkout
+UI->>Orch: 20. Forward checkout request
 
-Orch->>ACP: 21. create_checkout_session
-ACP->>MerchantAPI: 22. Create session
-MerchantAPI-->>ACP: 23. Session ID
-ACP-->>Orch: 24. Checkout ready
+Orch->>A2A: 21. reserve_item
+A2A->>MerchantAgent: 22. Reserve with TTL
+MerchantAgent-->>A2A: 23. Reserved
+A2A-->>Orch: 24. Reservation confirmed
+
+Orch->>ACP: 25. create_checkout_session
+ACP->>MerchantAPI: 26. Create session
+MerchantAPI-->>ACP: 27. Session ID
+ACP-->>Orch: 28. Checkout ready
 
 Note over Orch: Switch to workflow mode (DAG: shipping > payment > review > confirm)
 
 Note over User,UI: First time: user fills manually. Returning user: auto-retrieved by login.
 
-Orch-->>UI: 25. Show shipping form
+Orch-->>UI: 29. Show shipping form
 
-User->>UI: 26. Provide contact/shipping
-UI->>Orch: 27. Forward details
-Orch->>ACP: 28. update_checkout_session
-ACP->>MerchantAPI: 29. Update contact/shipping
-MerchantAPI-->>ACP: 30. Updated
-ACP-->>Orch: 31. Session updated
-Orch-->>UI: 32. Show payment form
+User->>UI: 30. Provide contact/shipping
+UI->>Orch: 31. Forward details
+Orch->>ACP: 32. update_checkout_session
+ACP->>MerchantAPI: 33. Update contact/shipping
+MerchantAPI-->>ACP: 34. Updated
+ACP-->>Orch: 35. Session updated
+Orch-->>UI: 36. Show payment form
 
-User->>UI: 33. Provide payment details
-UI->>Orch: 34. Forward payment
-Orch->>ACP: 35. update_checkout_session
-ACP->>MerchantAPI: 36. Update payment
-MerchantAPI-->>ACP: 37. Updated
-ACP-->>Orch: 38. Payment stored
-Orch-->>UI: 39. Show order review
+User->>UI: 37. Provide payment details
+UI->>Orch: 38. Forward payment
+Orch->>ACP: 39. update_checkout_session
+ACP->>MerchantAPI: 40. Update payment
+MerchantAPI-->>ACP: 41. Updated
+ACP-->>Orch: 42. Payment stored
+Orch-->>UI: 43. Show order review
 
-User->>UI: 40. Confirm purchase
-UI->>Orch: 41. Forward confirmation
+User->>UI: 44. Confirm purchase
+UI->>Orch: 45. Forward confirmation
 
-Orch->>ACP: 42. complete_checkout
-ACP->>MerchantAPI: 43. Finalize order
-MerchantAPI->>PSP: 44. Charge payment
-PSP-->>MerchantAPI: 45. Payment success
+Orch->>ACP: 46. complete_checkout
+ACP->>MerchantAPI: 47. Finalize order
+MerchantAPI->>PSP: 48. Charge payment
+PSP-->>MerchantAPI: 49. Payment success
 
-MerchantAPI-->>ACP: 46. Order confirmation
-ACP-->>Orch: 47. Success
+MerchantAPI-->>ACP: 50. Order confirmation
+ACP-->>Orch: 51. Success
 
-Orch-->>UI: 48. Show confirmation
+Orch-->>UI: 52. Show confirmation
 ```
 
 ## End-to-End Flow Summary
 
 1. The **Experience Layer** captures the user's request.
 2. The **Orchestrator** interprets intent, plans the workflow, and routes to the appropriate protocol.
-   - In conversation mode: LLM handles discovery and cart (steps 1-24)
-   - In workflow mode: DAG handles checkout deterministically (steps 25-48), following `shipping → payment → review → confirm`
+   - In conversation mode: LLM handles discovery, availability, cart, and reservation (steps 1-28)
+   - In workflow mode: DAG handles checkout deterministically (steps 29-52), following `shipping → payment → review → confirm`
 3. The **Protocol Layer** performs the required action:
    - **MCP** for tool access (discovery, ranking)
-   - **A2A** for agent collaboration (availability check)
+   - **A2A** for agent collaboration (availability check, item reservation)
    - **ACP** for commerce transactions (session creation, checkout updates, payment)
 4. **Commerce Layer** services execute catalog search, merchant validation, checkout, and payment.
 

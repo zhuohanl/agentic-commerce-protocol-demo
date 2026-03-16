@@ -172,6 +172,28 @@ LLM Router handles unexpected inputs that Fast Match cannot classify.
 
 **Category A answer generation:** When D3 classifies input as a quick question, the answer is retrieved from a knowledge base via RAG, not generated freely by the LLM. This keeps responses grounded in verified content (return policies, shipping times, product specs) and avoids hallucination in the checkout flow.
 
+### Shared Knowledge Base via MCP
+
+RAG retrieval is used in two places:
+
+1. **Conversation mode:** The conversation LLM answers questions during discovery
+2. **D3A (Quick Question):** The small/fast LLM answers questions during checkout
+
+Both use the same `query_knowledge_base` MCP tool, which retrieves from the same knowledge base. This ensures:
+
+- **Consistency:** Same question gets same answer regardless of mode
+- **Single infrastructure:** One embedding pipeline, one vector store, one knowledge base to maintain
+- **LLM-agnostic:** The MCP tool returns relevant documents; whichever LLM is calling it formats the response
+
+```
+Conversation LLM ──┐
+                    ├──> MCP Tool Gateway ──> query_knowledge_base ──> Knowledge Base
+Small/fast LLM   ──┘
+(D3A)
+```
+
+The LLMs differ (full conversation LLM vs small/fast LLM) but the tools and data are shared. See [Knowledge Base component](layered-architecture-mvp.md#component-knowledge-base) in the architecture doc.
+
 ---
 
 ## Workflow DAG
