@@ -349,6 +349,87 @@ In ACP flows, payment credentials are exchanged using single-use tokens, ensurin
 
 ---
 
+# Scenario: Buy Some Shirts
+
+The following flowchart traces the dataflow when a user says "I want to buy some shirts".
+
+```mermaid
+flowchart TB
+
+subgraph Experience
+    User((User))
+    UI[Super App UI]
+end
+
+subgraph Understanding
+    Intent[Intent Classification]
+    Planner[Planner / Orchestrator]
+end
+
+subgraph Protocols
+    MCP[MCP Tool Gateway]
+    A2A[A2A Agent Gateway]
+    ACP[ACP Checkout Adapter]
+end
+
+subgraph Commerce
+    Catalog[(Catalog DB)]
+    Ranker[Offer Ranking]
+    MerchantAgent[Merchant Agent]
+    MerchantAPI[Merchant Checkout API]
+    PSP[Payment Provider]
+end
+
+User -->|1 Buy some shirts| UI
+UI -->|2 Forward request| Intent
+Intent -->|3 search_products| Planner
+
+Planner -->|4 lookup_products| MCP
+MCP -->|5 Query| Catalog
+Catalog -.->|6 Product list| MCP
+MCP -.->|7 Products| Planner
+
+Planner -->|8 rank_offers| MCP
+MCP -->|9 Score| Ranker
+Ranker -.->|10 Ranked offers| MCP
+MCP -.->|11 Top results| Planner
+
+Planner -.->|12 Workflow complete| Intent
+Intent -.->|13 Display shirts| UI
+
+UI -->|14 Select shirt| Intent
+Intent -->|15 Plan checkout| Planner
+
+Planner -->|16 check_availability| A2A
+A2A -->|17 Verify stock| MerchantAgent
+MerchantAgent -.->|18 In stock| A2A
+A2A -.->|19 Confirmed| Planner
+
+Planner -->|20 start_checkout| ACP
+ACP -->|21 Create session| MerchantAPI
+MerchantAPI -.->|22 Session ID| ACP
+ACP -.->|23 Checkout ready| Planner
+
+Planner -.->|24 Checkout prepared| Intent
+Intent -.->|25 Show checkout| UI
+
+UI -->|26 Confirm purchase| Intent
+Intent -->|27 confirm_order| Planner
+
+Planner -->|28 complete_checkout| ACP
+ACP -->|29 Finalize order| MerchantAPI
+MerchantAPI -->|30 Charge payment| PSP
+PSP -.->|31 Payment success| MerchantAPI
+
+MerchantAPI -.->|32 Order confirmation| ACP
+ACP -.->|33 Success| Planner
+
+Planner -.->|34 Order complete| Intent
+Intent -.->|35 Show confirmation| UI
+```
+
+---
+
 # End-to-End Transaction Flow
 
 The following sequence diagram illustrates how all layers interact to complete a purchase.
@@ -360,51 +441,62 @@ participant UI as Super App UI
 participant Intent as Intent Classification
 participant Planner as Planner / Orchestrator
 participant MCP as MCP Gateway
-participant A2A as Merchant Agent
+participant Catalog
+participant Ranker
+participant A2A as A2A Gateway
+participant MerchantAgent as Merchant Agent
 participant ACP as ACP Adapter
-participant Merchant as Merchant API
+participant MerchantAPI as Merchant API
 participant PSP as Payment Provider
 
-User->>UI: "Find a blue shirt"
-UI->>Intent: user request
+User->>UI: 1. Buy some shirts
+UI->>Intent: 2. Forward request
+Intent->>Planner: 3. search_products
 
-Intent->>Planner: intent = search_products
+Planner->>MCP: 4. lookup_products
+MCP->>Catalog: 5. Query
+Catalog-->>MCP: 6. Product list
+MCP-->>Planner: 7. Products
 
-Planner->>MCP: lookup_products(query)
-MCP->>Catalog: search catalog
-Catalog-->>MCP: product list
-MCP-->>Planner: results
+Planner->>MCP: 8. rank_offers
+MCP->>Ranker: 9. Score
+Ranker-->>MCP: 10. Ranked offers
+MCP-->>Planner: 11. Top results
 
-Planner->>MCP: rank_offers(products)
-MCP->>Ranker: ranking
-Ranker-->>MCP: ranked offers
-MCP-->>Planner: ranked products
+Planner-->>Intent: 12. Workflow complete
+Intent-->>UI: 13. Display shirts
 
-Planner-->>UI: show products
+User->>UI: Select shirt
+UI->>Intent: 14. Forward selection
+Intent->>Planner: 15. Plan checkout
 
-User->>UI: select product
-UI->>Planner: purchase request
+Planner->>A2A: 16. check_availability
+A2A->>MerchantAgent: 17. Verify stock
+MerchantAgent-->>A2A: 18. In stock
+A2A-->>Planner: 19. Confirmed
 
-Planner->>A2A: verify availability
-A2A->>Merchant: inventory check
-Merchant-->>A2A: available
-A2A-->>Planner: confirmed
+Planner->>ACP: 20. start_checkout
+ACP->>MerchantAPI: 21. Create session
+MerchantAPI-->>ACP: 22. Session ID
+ACP-->>Planner: 23. Checkout ready
 
-Planner->>ACP: create_checkout_session
-ACP->>Merchant: create session
-Merchant-->>ACP: session id
+Planner-->>Intent: 24. Checkout prepared
+Intent-->>UI: 25. Show checkout
 
-User->>UI: confirm purchase
-UI->>Planner: proceed
+User->>UI: Confirm purchase
+UI->>Intent: 26. Forward confirmation
+Intent->>Planner: 27. confirm_order
 
-Planner->>ACP: complete_checkout
-ACP->>Merchant: finalize order
-Merchant->>PSP: charge payment
-PSP-->>Merchant: payment success
+Planner->>ACP: 28. complete_checkout
+ACP->>MerchantAPI: 29. Finalize order
+MerchantAPI->>PSP: 30. Charge payment
+PSP-->>MerchantAPI: 31. Payment success
 
-Merchant-->>ACP: order confirmation
-ACP-->>Planner: success
-Planner-->>UI: display success message
+MerchantAPI-->>ACP: 32. Order confirmation
+ACP-->>Planner: 33. Success
+
+Planner-->>Intent: 34. Order complete
+Intent-->>UI: 35. Show confirmation
 ```
 
 ## End-to-End Flow Summary
