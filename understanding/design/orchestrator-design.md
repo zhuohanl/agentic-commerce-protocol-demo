@@ -47,15 +47,15 @@ A deterministic state machine processes expected inputs (form data, button click
 
 ---
 
-## Two-Tier Input Classification
+## Workflow Input Classification
 
-Every user input during workflow mode passes through a two-tier classifier:
+Every user input during workflow mode passes through two classifiers:
 
 ```
 User input
-  -> Tier 1: Fast check (regex, rules, ~0ms)
+  -> Fast Match: rule check (regex, rules, ~0ms)
      -> Matches expected workflow action? -> Execute deterministically
-     -> No match? -> Tier 2: Full LLM (~1-2s)
+     -> No match? -> LLM Router: Full LLM (~1-2s)
         -> Navigate to unlocked node
         -> Return to conversation mode
         -> Clarify intent
@@ -67,13 +67,13 @@ User input
 %%{init: {'flowchart': {'curve': 'stepBefore'}}}%%
 flowchart LR
 
-A([User inquiry]) --> B{Active workflow session?}
+A([User inquiry]) --> B{"D1: Active workflow session?"}
 
 %% NO PATH
 B -- no --> F
 
 subgraph Conversation
-F[LLM] --> G{start_checkout?}
+F[LLM] --> G{"D4: start_checkout?"}
 G -- no --> F
 end
 
@@ -83,15 +83,15 @@ G -- yes --> C
 B -- yes --> C
 
 subgraph Workflow
-C{Tier 1<br/>Expected input?<br/>rules/regex}
+C{"D2: Fast Match<br/>Expected input?<br/>rules/regex"}
 C -- yes --> D[Map to node<br/>Execute]
-C -- no --> E{Tier 2<br/>LLM classifies}
+C -- no --> E{"D3: LLM Router<br/>Classifies intent"}
 
 E -- A: Quick question --> QA[Answer one-shot]
-E -- B: Discovery --> KB{Keep session?}
+E -- B: Discovery --> KB{"D3a: Keep session?"}
 E -- C: Cart mod --> CM[Route to cart node]
-E -- D: Abandon --> AB{Confirm cancel?}
-E -- E: Ambiguous --> AM{Continue or browse?}
+E -- D: Abandon --> AB{"D3b: Confirm cancel?"}
+E -- E: Ambiguous --> AM{"D3c: Continue or browse?"}
 end
 
 QA --> D
@@ -105,27 +105,27 @@ AB -- yes --> F
 AM -- browse --> KB
 ```
 
-### Tier 1: Rule-Based Classifier
+### D2: Fast Match (Rule-Based Classifier)
 
-The first tier checks whether user input matches expected actions for the current workflow node.
+Fast Match checks whether user input matches expected actions for the current workflow node.
 
 **Implementation:** regex patterns + expected field matching per node.
 
 **Examples:**
 
-| Current node | Expected input | Tier 1 match |
+| Current node | Expected input | Fast Match result |
 |---|---|---|
 | shipping | Address form submission | Yes, process directly |
 | payment | Credit card details | Yes, process directly |
 | review | "Confirm" button click | Yes, advance to confirm |
-| payment | "change my address" | No, escalate to Tier 2 |
-| review | "show me other shirts" | No, escalate to Tier 2 |
+| payment | "change my address" | No, escalate to LLM Router |
+| review | "show me other shirts" | No, escalate to LLM Router |
 
 **MVP approach:** Start with rules. Graduate to a lightweight classifier model when training data is available from production usage.
 
-### Tier 2: LLM Classifier
+### D3: LLM Router
 
-The second tier handles unexpected inputs that Tier 1 cannot match.
+LLM Router handles unexpected inputs that Fast Match cannot classify.
 
 The LLM receives the current workflow state and user input, then decides:
 
@@ -150,7 +150,7 @@ Each node defines:
 |---|---|
 | `id` | Unique node identifier |
 | `preconditions` | What data must be present before this node is accessible |
-| `expected_inputs` | Input patterns that Tier 1 can match |
+| `expected_inputs` | Input patterns that Fast Match can classify |
 | `transitions` | Valid next nodes |
 | `acp_operation` | The ACP call executed when this node completes |
 
@@ -191,11 +191,11 @@ review: unlocked when payment is filled
 confirm: unlocked when review is seen
 ```
 
-The LLM (Tier 2) can route the user to any **unlocked** node. It cannot skip ahead to locked nodes.
+The LLM Router (D3) can route the user to any **unlocked** node. It cannot skip ahead to locked nodes.
 
 **Example:** A user on the payment node says "change my address."
-1. Tier 1 does not match (not a payment input)
-2. Tier 2 LLM classifies: navigate to shipping node
+1. Fast Match (D2) does not match (not a payment input)
+2. LLM Router (D3) classifies: navigate to shipping node
 3. Shipping node is unlocked (was already completed)
 4. User is routed to shipping node with pre-filled data
 5. After update, workflow resumes from shipping forward
@@ -206,9 +206,9 @@ The LLM (Tier 2) can route the user to any **unlocked** node. It cannot skip ahe
 
 | Scenario | Path | Latency |
 |---|---|---|
-| Happy path checkout step | Tier 1 match, deterministic execution | ~50-100ms |
-| Navigate to another node | Tier 1 miss, Tier 2 LLM, route to node | ~1-2s |
-| Exit to conversation mode | Tier 1 miss, Tier 2 LLM, mode switch | ~1-2s |
+| Happy path checkout step | D2 Fast Match, deterministic execution | ~50-100ms |
+| Navigate to another node | D2 miss, D3 LLM Router, route to node | ~1-2s |
+| Exit to conversation mode | D2 miss, D3 LLM Router, mode switch | ~1-2s |
 | Discovery and comparison | Always LLM (conversation mode) | ~1-3s (expected) |
 
 Users tolerate latency during browsing (feels conversational). They do not tolerate it during checkout (feels slow). This design places LLM latency only where users accept it.
@@ -222,7 +222,7 @@ Users tolerate latency during browsing (feels conversational). They do not toler
 flowchart LR
 
 C([Conversation]) -->|start_checkout| W([Workflow])
-W -->|Tier 2: exit| C
+W -->|D3 LLM Router: exit| C
 W -->|User cancels| C
 C -->|Discovery loops| C
 W -->|Happy path transitions| W
@@ -241,9 +241,9 @@ The orchestrator:
 
 ### Workflow to Conversation
 
-Trigger: Tier 2 LLM classifies user input as requiring conversation mode.
+Trigger: LLM Router (D3) classifies user input as requiring conversation mode.
 
-The exit path depends on the category of intent detected. See [Tier 2 Exit Classification](#tier-2-exit-classification) below.
+The exit path depends on the category of intent detected. See [LLM Router Exit Classification](#llm-router-exit-classification) below.
 
 ---
 
@@ -277,9 +277,9 @@ The workflow DAG is defined as configuration, not code. This enables:
 - Adding new nodes (loyalty, gift wrapping, coupon) without orchestrator code changes
 - A/B testing different checkout sequences
 
-### Swappable Tier 1 Classifier
+### Swappable Fast Match Classifier
 
-The Tier 1 classifier interface is abstracted:
+The Fast Match (D2) interface is abstracted:
 
 - **MVP:** Regex and rule-based matching
 - **Future:** Lightweight fine-tuned model (~20ms inference)
@@ -304,9 +304,9 @@ This follows the ACP delegated payment model where the merchant remains the merc
 
 ---
 
-## Tier 2 Exit Classification
+## LLM Router Exit Classification
 
-When Tier 2 determines the user wants to leave the current workflow node, it classifies the intent into one of five categories.
+When LLM Router (D3) determines the user wants to leave the current workflow node, it classifies the intent into one of five categories.
 
 ### Category A: Quick Question
 
@@ -367,7 +367,7 @@ Intent is unclear. Needs clarification.
 ### Decision Tree Summary
 
 ```
-Tier 2 classifies exit intent
+D3 LLM Router classifies exit intent
 |
 +-- A: Quick question
 |   -> Answer via LLM (one-shot)
