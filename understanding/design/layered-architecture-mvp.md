@@ -397,35 +397,37 @@ MCP -.->|11 Top results| Planner
 Planner -.->|12 Workflow complete| Intent
 Intent -.->|13 Display shirts| UI
 
-UI -->|14 Select shirt| Intent
-Intent -->|15 Plan checkout| Planner
+User -->|14 Select shirt| UI
+UI -->|15 Forward selection| Intent
+Intent -->|16 Plan checkout| Planner
 
-Planner -->|16 check_availability| A2A
-A2A -->|17 Verify stock| MerchantAgent
-MerchantAgent -.->|18 In stock| A2A
-A2A -.->|19 Confirmed| Planner
+Planner -->|17 check_availability| A2A
+A2A -->|18 Verify stock| MerchantAgent
+MerchantAgent -.->|19 In stock| A2A
+A2A -.->|20 Confirmed| Planner
 
-Planner -->|20 start_checkout| ACP
-ACP -->|21 Create session| MerchantAPI
-MerchantAPI -.->|22 Session ID| ACP
-ACP -.->|23 Checkout ready| Planner
+Planner -->|21 start_checkout| ACP
+ACP -->|22 Create session| MerchantAPI
+MerchantAPI -.->|23 Session ID| ACP
+ACP -.->|24 Checkout ready| Planner
 
-Planner -.->|24 Checkout prepared| Intent
-Intent -.->|25 Show checkout| UI
+Planner -.->|25 Checkout prepared| Intent
+Intent -.->|26 Show checkout| UI
 
-UI -->|26 Confirm purchase| Intent
-Intent -->|27 confirm_order| Planner
+User -->|27 Confirm purchase| UI
+UI -->|28 Forward confirmation| Intent
+Intent -->|29 confirm_order| Planner
 
-Planner -->|28 complete_checkout| ACP
-ACP -->|29 Finalize order| MerchantAPI
-MerchantAPI -->|30 Charge payment| PSP
-PSP -.->|31 Payment success| MerchantAPI
+Planner -->|30 complete_checkout| ACP
+ACP -->|31 Finalize order| MerchantAPI
+MerchantAPI -->|32 Charge payment| PSP
+PSP -.->|33 Payment success| MerchantAPI
 
-MerchantAPI -.->|32 Order confirmation| ACP
-ACP -.->|33 Success| Planner
+MerchantAPI -.->|34 Order confirmation| ACP
+ACP -.->|35 Success| Planner
 
-Planner -.->|34 Order complete| Intent
-Intent -.->|35 Show confirmation| UI
+Planner -.->|36 Order complete| Intent
+Intent -.->|37 Show confirmation| UI
 ```
 
 ---
@@ -466,37 +468,37 @@ MCP-->>Planner: 11. Top results
 Planner-->>Intent: 12. Workflow complete
 Intent-->>UI: 13. Display shirts
 
-User->>UI: Select shirt
-UI->>Intent: 14. Forward selection
-Intent->>Planner: 15. Plan checkout
+User->>UI: 14. Select shirt
+UI->>Intent: 15. Forward selection
+Intent->>Planner: 16. Plan checkout
 
-Planner->>A2A: 16. check_availability
-A2A->>MerchantAgent: 17. Verify stock
-MerchantAgent-->>A2A: 18. In stock
-A2A-->>Planner: 19. Confirmed
+Planner->>A2A: 17. check_availability
+A2A->>MerchantAgent: 18. Verify stock
+MerchantAgent-->>A2A: 19. In stock
+A2A-->>Planner: 20. Confirmed
 
-Planner->>ACP: 20. start_checkout
-ACP->>MerchantAPI: 21. Create session
-MerchantAPI-->>ACP: 22. Session ID
-ACP-->>Planner: 23. Checkout ready
+Planner->>ACP: 21. start_checkout
+ACP->>MerchantAPI: 22. Create session
+MerchantAPI-->>ACP: 23. Session ID
+ACP-->>Planner: 24. Checkout ready
 
-Planner-->>Intent: 24. Checkout prepared
-Intent-->>UI: 25. Show checkout
+Planner-->>Intent: 25. Checkout prepared
+Intent-->>UI: 26. Show checkout
 
-User->>UI: Confirm purchase
-UI->>Intent: 26. Forward confirmation
-Intent->>Planner: 27. confirm_order
+User->>UI: 27. Confirm purchase
+UI->>Intent: 28. Forward confirmation
+Intent->>Planner: 29. confirm_order
 
-Planner->>ACP: 28. complete_checkout
-ACP->>MerchantAPI: 29. Finalize order
-MerchantAPI->>PSP: 30. Charge payment
-PSP-->>MerchantAPI: 31. Payment success
+Planner->>ACP: 30. complete_checkout
+ACP->>MerchantAPI: 31. Finalize order
+MerchantAPI->>PSP: 32. Charge payment
+PSP-->>MerchantAPI: 33. Payment success
 
-MerchantAPI-->>ACP: 32. Order confirmation
-ACP-->>Planner: 33. Success
+MerchantAPI-->>ACP: 34. Order confirmation
+ACP-->>Planner: 35. Success
 
-Planner-->>Intent: 34. Order complete
-Intent-->>UI: 35. Show confirmation
+Planner-->>Intent: 36. Order complete
+Intent-->>UI: 37. Show confirmation
 ```
 
 ## End-to-End Flow Summary
