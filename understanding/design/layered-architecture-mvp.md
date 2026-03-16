@@ -354,6 +354,8 @@ subgraph Commerce
     PSP[Payment Provider]
 end
 
+%% CONVERSATION MODE (LLM-driven: discovery + cart)
+
 User -->|1 Buy some shirts| UI
 UI -->|2 Forward request| Orch
 
@@ -369,49 +371,55 @@ MCP -.->|10 Top results| Orch
 
 Orch -.->|11 Display shirts| UI
 
-User -->|12 Select shirt| UI
+User -->|12 Add shirt to cart| UI
 UI -->|13 Forward selection| Orch
+Orch -.->|14 Added to cart| UI
 
-Orch -->|14 check_availability| A2A
-A2A -->|15 Verify stock| MerchantAgent
-MerchantAgent -.->|16 In stock| A2A
-A2A -.->|17 Confirmed| Orch
+User -->|15 Proceed to checkout| UI
+UI -->|16 Forward checkout request| Orch
 
-Orch -->|18 start_checkout| ACP
-ACP -->|19 Create session| MerchantAPI
-MerchantAPI -.->|20 Session ID| ACP
-ACP -.->|21 Checkout ready| Orch
+Orch -->|17 check_availability| A2A
+A2A -->|18 Verify stock| MerchantAgent
+MerchantAgent -.->|19 In stock| A2A
+A2A -.->|20 Confirmed| Orch
 
-Orch -.->|22 Show checkout form| UI
+Orch -->|21 create_checkout_session| ACP
+ACP -->|22 Create session| MerchantAPI
+MerchantAPI -.->|23 Session ID| ACP
+ACP -.->|24 Checkout ready| Orch
 
-User -->|23 Provide contact/shipping| UI
-UI -->|24 Forward details| Orch
-Orch -->|25 update_checkout_session| ACP
-ACP -->|26 Update contact/shipping| MerchantAPI
-MerchantAPI -.->|27 Updated| ACP
-ACP -.->|28 Session updated| Orch
-Orch -.->|29 Show payment form| UI
+%% WORKFLOW MODE (DAG-driven: shipping > payment > review > confirm)
 
-User -->|30 Provide payment details| UI
-UI -->|31 Forward payment| Orch
-Orch -->|32 update_checkout_session| ACP
-ACP -->|33 Update payment| MerchantAPI
-MerchantAPI -.->|34 Updated| ACP
-ACP -.->|35 Payment stored| Orch
-Orch -.->|36 Show order summary| UI
+Orch -.->|25 Show shipping form| UI
 
-User -->|37 Confirm purchase| UI
-UI -->|38 Forward confirmation| Orch
+User -->|26 Provide contact/shipping| UI
+UI -->|27 Forward details| Orch
+Orch -->|28 update_checkout_session| ACP
+ACP -->|29 Update contact/shipping| MerchantAPI
+MerchantAPI -.->|30 Updated| ACP
+ACP -.->|31 Session updated| Orch
+Orch -.->|32 Show payment form| UI
 
-Orch -->|39 complete_checkout| ACP
-ACP -->|40 Finalize order| MerchantAPI
-MerchantAPI -->|41 Charge payment| PSP
-PSP -.->|42 Payment success| MerchantAPI
+User -->|33 Provide payment details| UI
+UI -->|34 Forward payment| Orch
+Orch -->|35 update_checkout_session| ACP
+ACP -->|36 Update payment| MerchantAPI
+MerchantAPI -.->|37 Updated| ACP
+ACP -.->|38 Payment stored| Orch
+Orch -.->|39 Show order review| UI
 
-MerchantAPI -.->|43 Order confirmation| ACP
-ACP -.->|44 Success| Orch
+User -->|40 Confirm purchase| UI
+UI -->|41 Forward confirmation| Orch
 
-Orch -.->|45 Show confirmation| UI
+Orch -->|42 complete_checkout| ACP
+ACP -->|43 Finalize order| MerchantAPI
+MerchantAPI -->|44 Charge payment| PSP
+PSP -.->|45 Payment success| MerchantAPI
+
+MerchantAPI -.->|46 Order confirmation| ACP
+ACP -.->|47 Success| Orch
+
+Orch -.->|48 Show confirmation| UI
 ```
 
 ---
@@ -452,65 +460,69 @@ MCP-->>Orch: 10. Top results
 
 Orch-->>UI: 11. Display shirts
 
-User->>UI: 12. Select shirt
+User->>UI: 12. Add shirt to cart
 UI->>Orch: 13. Forward selection
+Orch-->>UI: 14. Added to cart
 
-Orch->>A2A: 14. check_availability
-A2A->>MerchantAgent: 15. Verify stock
-MerchantAgent-->>A2A: 16. In stock
-A2A-->>Orch: 17. Confirmed
+User->>UI: 15. Proceed to checkout
+UI->>Orch: 16. Forward checkout request
 
-Orch->>ACP: 18. start_checkout
-ACP->>MerchantAPI: 19. Create session
-MerchantAPI-->>ACP: 20. Session ID
-ACP-->>Orch: 21. Checkout ready
+Orch->>A2A: 17. check_availability
+A2A->>MerchantAgent: 18. Verify stock
+MerchantAgent-->>A2A: 19. In stock
+A2A-->>Orch: 20. Confirmed
 
-Note over Orch: Switch to workflow mode (DAG-driven)
+Orch->>ACP: 21. create_checkout_session
+ACP->>MerchantAPI: 22. Create session
+MerchantAPI-->>ACP: 23. Session ID
+ACP-->>Orch: 24. Checkout ready
 
-Orch-->>UI: 22. Show checkout form
+Note over Orch: Switch to workflow mode (DAG: shipping > payment > review > confirm)
 
 Note over User,UI: First time: user fills manually. Returning user: auto-retrieved by login.
 
-User->>UI: 23. Provide contact/shipping
-UI->>Orch: 24. Forward details
-Orch->>ACP: 25. update_checkout_session
-ACP->>MerchantAPI: 26. Update contact/shipping
-MerchantAPI-->>ACP: 27. Updated
-ACP-->>Orch: 28. Session updated
-Orch-->>UI: 29. Show payment form
+Orch-->>UI: 25. Show shipping form
 
-User->>UI: 30. Provide payment details
-UI->>Orch: 31. Forward payment
-Orch->>ACP: 32. update_checkout_session
-ACP->>MerchantAPI: 33. Update payment
-MerchantAPI-->>ACP: 34. Updated
-ACP-->>Orch: 35. Payment stored
-Orch-->>UI: 36. Show order summary
+User->>UI: 26. Provide contact/shipping
+UI->>Orch: 27. Forward details
+Orch->>ACP: 28. update_checkout_session
+ACP->>MerchantAPI: 29. Update contact/shipping
+MerchantAPI-->>ACP: 30. Updated
+ACP-->>Orch: 31. Session updated
+Orch-->>UI: 32. Show payment form
 
-User->>UI: 37. Confirm purchase
-UI->>Orch: 38. Forward confirmation
+User->>UI: 33. Provide payment details
+UI->>Orch: 34. Forward payment
+Orch->>ACP: 35. update_checkout_session
+ACP->>MerchantAPI: 36. Update payment
+MerchantAPI-->>ACP: 37. Updated
+ACP-->>Orch: 38. Payment stored
+Orch-->>UI: 39. Show order review
 
-Orch->>ACP: 39. complete_checkout
-ACP->>MerchantAPI: 40. Finalize order
-MerchantAPI->>PSP: 41. Charge payment
-PSP-->>MerchantAPI: 42. Payment success
+User->>UI: 40. Confirm purchase
+UI->>Orch: 41. Forward confirmation
 
-MerchantAPI-->>ACP: 43. Order confirmation
-ACP-->>Orch: 44. Success
+Orch->>ACP: 42. complete_checkout
+ACP->>MerchantAPI: 43. Finalize order
+MerchantAPI->>PSP: 44. Charge payment
+PSP-->>MerchantAPI: 45. Payment success
 
-Orch-->>UI: 45. Show confirmation
+MerchantAPI-->>ACP: 46. Order confirmation
+ACP-->>Orch: 47. Success
+
+Orch-->>UI: 48. Show confirmation
 ```
 
 ## End-to-End Flow Summary
 
 1. The **Experience Layer** captures the user's request.
 2. The **Orchestrator** interprets intent, plans the workflow, and routes to the appropriate protocol.
-   - In conversation mode: LLM handles discovery (steps 1-21)
-   - In workflow mode: DAG handles checkout deterministically (steps 22-45)
+   - In conversation mode: LLM handles discovery and cart (steps 1-24)
+   - In workflow mode: DAG handles checkout deterministically (steps 25-48), following `shipping → payment → review → confirm`
 3. The **Protocol Layer** performs the required action:
    - **MCP** for tool access (discovery, ranking)
    - **A2A** for agent collaboration (availability check)
-   - **ACP** for commerce transactions (checkout, payment)
+   - **ACP** for commerce transactions (session creation, checkout updates, payment)
 4. **Commerce Layer** services execute catalog search, merchant validation, checkout, and payment.
 
 This layered architecture demonstrates how MCP, A2A, and ACP work together to enable agent-driven commerce transactions.
