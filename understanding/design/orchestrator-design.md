@@ -64,6 +64,7 @@ User input
 ### Orchestrator Flow Diagram
 
 ```mermaid
+%%{init: {'flowchart': {'curve': 'stepBefore'}}}%%
 flowchart LR
 
 A([User inquiry]) --> B{Active workflow session?}
@@ -217,14 +218,15 @@ Users tolerate latency during browsing (feels conversational). They do not toler
 ## Mode Transitions
 
 ```mermaid
-stateDiagram-v2
+%%{init: {'flowchart': {'curve': 'stepBefore'}}}%%
+flowchart LR
 
-Conversation --> Workflow: start_checkout intent
-Workflow --> Conversation: Tier 2 LLM decides exit
-Workflow --> Conversation: User cancels
-Workflow --> End: Order confirmed
-Conversation --> Conversation: Discovery / comparison loops
-Workflow --> Workflow: Happy path node transitions
+C([Conversation]) -->|start_checkout| W([Workflow])
+W -->|Tier 2: exit| C
+W -->|User cancels| C
+C -->|Discovery loops| C
+W -->|Happy path transitions| W
+W -->|Order confirmed| E([End])
 ```
 
 ### Conversation to Workflow
