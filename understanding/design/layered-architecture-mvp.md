@@ -31,9 +31,8 @@ subgraph L1[Experience]
 UI[Super App UI]
 end
 
-subgraph L2[Language Understanding]
-Intent[Intent Classification]
-Planner[Planner / Orchestrator]
+subgraph L2[Orchestration]
+Orch[Orchestrator]
 end
 
 subgraph L3[Protocol Layer]
@@ -54,12 +53,11 @@ MerchantAPI[Merchant Checkout API]
 PSP[Payment Provider]
 end
 
-UI --> Intent
-Intent --> Planner
+UI --> Orch
 
-Planner --> MCP
-Planner --> A2A
-Planner --> ACP
+Orch --> MCP
+Orch --> A2A
+Orch --> ACP
 
 MCP --> Catalog
 MCP --> Ranker
@@ -111,68 +109,43 @@ The UI layer focuses solely on presentation and interaction.
 
 ---
 
-## Layer 2 — Language Understanding Layer
+## Layer 2 — Orchestration Layer
 
-This layer converts natural language requests into structured workflow actions.
+The Orchestrator manages two execution modes and routes requests to the appropriate protocol.
 
-It contains two components:
+See [Orchestrator Design](orchestrator-design.md) for full details.
 
-- Intent Classification
-- Planner / Orchestrator
+### Component: Orchestrator
 
-### Component: Intent Classification
-
-Intent Classification determines what the user wants to accomplish.
-
-This component typically uses a large language model or classifier to interpret user requests.
+The Orchestrator combines intent understanding and workflow routing into a single component.
 
 **Responsibilities**
 
-- Detect user intent
-- Extract structured parameters (entities)
-- Provide normalized input to the orchestration layer
-
-**Example transformation:**
-
-User input:
-
-> Find a blue shirt under $50
-
-Output:
-
-```
-intent = search_products
-entities = {
-  category: "shirt",
-  color: "blue",
-  price_max: 50
-}
-```
-
-This component performs language understanding only, not workflow execution.
-
-### Component: Planner / Orchestrator
-
-The Planner / Orchestrator converts structured intents into executable workflows.
-
-It acts as a deterministic routing layer that decides which protocol or service should be invoked.
-
-**Responsibilities**
-
-- Map intents to execution steps
-- Route requests to the correct protocol
+- Interpret user intent (via LLM in conversation mode, via Fast Match / LLM Router in workflow mode)
+- Manage mode transitions (conversation mode for discovery, workflow mode for checkout)
+- Route requests to the correct protocol (MCP, A2A, ACP)
 - Coordinate multi-step workflows
-- Maintain simple task state
+- Maintain session and DAG state
 
-**Example routing logic:**
+**Conversation mode** (discovery):
+
+The LLM interprets natural language and decides actions in a single reasoning call.
 
 ```
-intent = search_products    → MCP tool
-intent = check_availability → A2A merchant agent
-intent = start_checkout     → ACP checkout adapter
+"Find a blue shirt under $50"
+  → intent: search_products
+  → route: MCP tool (lookup_products)
 ```
 
-This component contains minimal reasoning and is intentionally kept thin and deterministic.
+**Workflow mode** (checkout):
+
+A deterministic DAG processes expected inputs without LLM involvement.
+
+```
+Shipping form submitted
+  → D2 Fast Match: expected input
+  → route: ACP (update_checkout_session)
+```
 
 ---
 
@@ -349,9 +322,11 @@ In ACP flows, payment credentials are exchanged using single-use tokens, ensurin
 
 ---
 
-# Scenario: Buy Some Shirts
+# Scenario: Buy Some Shirts (Happy Path)
 
-The following flowchart traces the dataflow when a user says "I want to buy some shirts".
+The following flowchart traces the happy path (95% of interactions) when a user says "I want to buy some shirts".
+
+For unhappy path handling (unexpected user input during checkout), see [Orchestrator Design — LLM Router Exit Classification](orchestrator-design.md#llm-router-exit-classification).
 
 ```mermaid
 flowchart TB
@@ -361,9 +336,8 @@ subgraph Experience
     UI[Super App UI]
 end
 
-subgraph Understanding
-    Intent[Intent Classification]
-    Planner[Planner / Orchestrator]
+subgraph Orchestration
+    Orch[Orchestrator]
 end
 
 subgraph Protocols
@@ -381,87 +355,77 @@ subgraph Commerce
 end
 
 User -->|1 Buy some shirts| UI
-UI -->|2 Forward request| Intent
-Intent -->|3 search_products| Planner
+UI -->|2 Forward request| Orch
 
-Planner -->|4 lookup_products| MCP
-MCP -->|5 Query| Catalog
-Catalog -.->|6 Product list| MCP
-MCP -.->|7 Products| Planner
+Orch -->|3 lookup_products| MCP
+MCP -->|4 Query| Catalog
+Catalog -.->|5 Product list| MCP
+MCP -.->|6 Products| Orch
 
-Planner -->|8 rank_offers| MCP
-MCP -->|9 Score| Ranker
-Ranker -.->|10 Ranked offers| MCP
-MCP -.->|11 Top results| Planner
+Orch -->|7 rank_offers| MCP
+MCP -->|8 Score| Ranker
+Ranker -.->|9 Ranked offers| MCP
+MCP -.->|10 Top results| Orch
 
-Planner -.->|12 Workflow complete| Intent
-Intent -.->|13 Display shirts| UI
+Orch -.->|11 Display shirts| UI
 
-User -->|14 Select shirt| UI
-UI -->|15 Forward selection| Intent
-Intent -->|16 Plan checkout| Planner
+User -->|12 Select shirt| UI
+UI -->|13 Forward selection| Orch
 
-Planner -->|17 check_availability| A2A
-A2A -->|18 Verify stock| MerchantAgent
-MerchantAgent -.->|19 In stock| A2A
-A2A -.->|20 Confirmed| Planner
+Orch -->|14 check_availability| A2A
+A2A -->|15 Verify stock| MerchantAgent
+MerchantAgent -.->|16 In stock| A2A
+A2A -.->|17 Confirmed| Orch
 
-Planner -->|21 start_checkout| ACP
-ACP -->|22 Create session| MerchantAPI
-MerchantAPI -.->|23 Session ID| ACP
-ACP -.->|24 Checkout ready| Planner
+Orch -->|18 start_checkout| ACP
+ACP -->|19 Create session| MerchantAPI
+MerchantAPI -.->|20 Session ID| ACP
+ACP -.->|21 Checkout ready| Orch
 
-Planner -.->|25 Checkout prepared| Intent
-Intent -.->|26 Show checkout form| UI
+Orch -.->|22 Show checkout form| UI
 
-User -->|27 Provide contact/shipping| UI
-UI -->|28 Forward details| Intent
-Intent -->|29 update_checkout| Planner
-Planner -->|30 update_checkout_session| ACP
-ACP -->|31 Update contact/shipping| MerchantAPI
-MerchantAPI -.->|32 Updated| ACP
-ACP -.->|33 Session updated| Planner
-Planner -.->|34 Request payment| Intent
-Intent -.->|35 Show payment form| UI
+User -->|23 Provide contact/shipping| UI
+UI -->|24 Forward details| Orch
+Orch -->|25 update_checkout_session| ACP
+ACP -->|26 Update contact/shipping| MerchantAPI
+MerchantAPI -.->|27 Updated| ACP
+ACP -.->|28 Session updated| Orch
+Orch -.->|29 Show payment form| UI
 
-User -->|36 Provide payment details| UI
-UI -->|37 Forward payment| Intent
-Intent -->|38 update_checkout| Planner
-Planner -->|39 update_checkout_session| ACP
-ACP -->|40 Update payment| MerchantAPI
-MerchantAPI -.->|41 Updated| ACP
-ACP -.->|42 Payment stored| Planner
-Planner -.->|43 Ready to confirm| Intent
-Intent -.->|44 Show order summary| UI
+User -->|30 Provide payment details| UI
+UI -->|31 Forward payment| Orch
+Orch -->|32 update_checkout_session| ACP
+ACP -->|33 Update payment| MerchantAPI
+MerchantAPI -.->|34 Updated| ACP
+ACP -.->|35 Payment stored| Orch
+Orch -.->|36 Show order summary| UI
 
-User -->|45 Confirm purchase| UI
-UI -->|46 Forward confirmation| Intent
-Intent -->|47 confirm_order| Planner
+User -->|37 Confirm purchase| UI
+UI -->|38 Forward confirmation| Orch
 
-Planner -->|48 complete_checkout| ACP
-ACP -->|49 Finalize order| MerchantAPI
-MerchantAPI -->|50 Charge payment| PSP
-PSP -.->|51 Payment success| MerchantAPI
+Orch -->|39 complete_checkout| ACP
+ACP -->|40 Finalize order| MerchantAPI
+MerchantAPI -->|41 Charge payment| PSP
+PSP -.->|42 Payment success| MerchantAPI
 
-MerchantAPI -.->|52 Order confirmation| ACP
-ACP -.->|53 Success| Planner
+MerchantAPI -.->|43 Order confirmation| ACP
+ACP -.->|44 Success| Orch
 
-Planner -.->|54 Order complete| Intent
-Intent -.->|55 Show confirmation| UI
+Orch -.->|45 Show confirmation| UI
 ```
 
 ---
 
-# End-to-End Transaction Flow
+# End-to-End Transaction Flow (Happy Path)
 
-The following sequence diagram illustrates how all layers interact to complete a purchase.
+The following sequence diagram illustrates the happy path (95% of interactions). For unhappy path handling, see [Orchestrator Design](orchestrator-design.md).
+
 ```mermaid
 sequenceDiagram
 
 actor User
 participant UI as Super App UI
-participant Intent as Intent Classification
-participant Planner as Planner / Orchestrator
+participant Orch as Orchestrator
 participant MCP as MCP Gateway
 participant Catalog
 participant Ranker
@@ -471,88 +435,82 @@ participant ACP as ACP Adapter
 participant MerchantAPI as Merchant API
 participant PSP as Payment Provider
 
+Note over Orch: Conversation mode (LLM-driven)
+
 User->>UI: 1. Buy some shirts
-UI->>Intent: 2. Forward request
-Intent->>Planner: 3. search_products
+UI->>Orch: 2. Forward request
 
-Planner->>MCP: 4. lookup_products
-MCP->>Catalog: 5. Query
-Catalog-->>MCP: 6. Product list
-MCP-->>Planner: 7. Products
+Orch->>MCP: 3. lookup_products
+MCP->>Catalog: 4. Query
+Catalog-->>MCP: 5. Product list
+MCP-->>Orch: 6. Products
 
-Planner->>MCP: 8. rank_offers
-MCP->>Ranker: 9. Score
-Ranker-->>MCP: 10. Ranked offers
-MCP-->>Planner: 11. Top results
+Orch->>MCP: 7. rank_offers
+MCP->>Ranker: 8. Score
+Ranker-->>MCP: 9. Ranked offers
+MCP-->>Orch: 10. Top results
 
-Planner-->>Intent: 12. Workflow complete
-Intent-->>UI: 13. Display shirts
+Orch-->>UI: 11. Display shirts
 
-User->>UI: 14. Select shirt
-UI->>Intent: 15. Forward selection
-Intent->>Planner: 16. Plan checkout
+User->>UI: 12. Select shirt
+UI->>Orch: 13. Forward selection
 
-Planner->>A2A: 17. check_availability
-A2A->>MerchantAgent: 18. Verify stock
-MerchantAgent-->>A2A: 19. In stock
-A2A-->>Planner: 20. Confirmed
+Orch->>A2A: 14. check_availability
+A2A->>MerchantAgent: 15. Verify stock
+MerchantAgent-->>A2A: 16. In stock
+A2A-->>Orch: 17. Confirmed
 
-Planner->>ACP: 21. start_checkout
-ACP->>MerchantAPI: 22. Create session
-MerchantAPI-->>ACP: 23. Session ID
-ACP-->>Planner: 24. Checkout ready
+Orch->>ACP: 18. start_checkout
+ACP->>MerchantAPI: 19. Create session
+MerchantAPI-->>ACP: 20. Session ID
+ACP-->>Orch: 21. Checkout ready
 
-Planner-->>Intent: 25. Checkout prepared
-Intent-->>UI: 26. Show checkout form
+Note over Orch: Switch to workflow mode (DAG-driven)
+
+Orch-->>UI: 22. Show checkout form
 
 Note over User,UI: First time: user fills manually. Returning user: auto-retrieved by login.
 
-User->>UI: 27. Provide contact/shipping
-UI->>Intent: 28. Forward details
-Intent->>Planner: 29. update_checkout
-Planner->>ACP: 30. update_checkout_session
-ACP->>MerchantAPI: 31. Update contact/shipping
-MerchantAPI-->>ACP: 32. Updated
-ACP-->>Planner: 33. Session updated
-Planner-->>Intent: 34. Request payment
-Intent-->>UI: 35. Show payment form
+User->>UI: 23. Provide contact/shipping
+UI->>Orch: 24. Forward details
+Orch->>ACP: 25. update_checkout_session
+ACP->>MerchantAPI: 26. Update contact/shipping
+MerchantAPI-->>ACP: 27. Updated
+ACP-->>Orch: 28. Session updated
+Orch-->>UI: 29. Show payment form
 
-User->>UI: 36. Provide payment details
-UI->>Intent: 37. Forward payment
-Intent->>Planner: 38. update_checkout
-Planner->>ACP: 39. update_checkout_session
-ACP->>MerchantAPI: 40. Update payment
-MerchantAPI-->>ACP: 41. Updated
-ACP-->>Planner: 42. Payment stored
-Planner-->>Intent: 43. Ready to confirm
-Intent-->>UI: 44. Show order summary
+User->>UI: 30. Provide payment details
+UI->>Orch: 31. Forward payment
+Orch->>ACP: 32. update_checkout_session
+ACP->>MerchantAPI: 33. Update payment
+MerchantAPI-->>ACP: 34. Updated
+ACP-->>Orch: 35. Payment stored
+Orch-->>UI: 36. Show order summary
 
-User->>UI: 45. Confirm purchase
-UI->>Intent: 46. Forward confirmation
-Intent->>Planner: 47. confirm_order
+User->>UI: 37. Confirm purchase
+UI->>Orch: 38. Forward confirmation
 
-Planner->>ACP: 48. complete_checkout
-ACP->>MerchantAPI: 49. Finalize order
-MerchantAPI->>PSP: 50. Charge payment
-PSP-->>MerchantAPI: 51. Payment success
+Orch->>ACP: 39. complete_checkout
+ACP->>MerchantAPI: 40. Finalize order
+MerchantAPI->>PSP: 41. Charge payment
+PSP-->>MerchantAPI: 42. Payment success
 
-MerchantAPI-->>ACP: 52. Order confirmation
-ACP-->>Planner: 53. Success
+MerchantAPI-->>ACP: 43. Order confirmation
+ACP-->>Orch: 44. Success
 
-Planner-->>Intent: 54. Order complete
-Intent-->>UI: 55. Show confirmation
+Orch-->>UI: 45. Show confirmation
 ```
 
 ## End-to-End Flow Summary
 
 1. The **Experience Layer** captures the user's request.
-2. **Intent Classification** determines the user's intent.
-3. The **Planner / Orchestrator** determines the workflow and selects the appropriate protocol.
-4. The **Protocol Layer** performs the required action:
-   - **MCP** for tool access
-   - **A2A** for agent collaboration
-   - **ACP** for commerce transactions
-5. **Local Services** support product discovery and ranking.
-6. **External Systems** execute checkout and payment.
+2. The **Orchestrator** interprets intent, plans the workflow, and routes to the appropriate protocol.
+   - In conversation mode: LLM handles discovery (steps 1-21)
+   - In workflow mode: DAG handles checkout deterministically (steps 22-45)
+3. The **Protocol Layer** performs the required action:
+   - **MCP** for tool access (discovery, ranking)
+   - **A2A** for agent collaboration (availability check)
+   - **ACP** for commerce transactions (checkout, payment)
+4. **Commerce Layer** services execute catalog search, merchant validation, checkout, and payment.
 
 This layered architecture demonstrates how MCP, A2A, and ACP work together to enable agent-driven commerce transactions.
